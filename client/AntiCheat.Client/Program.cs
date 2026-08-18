@@ -3,15 +3,16 @@ using System.Text.Json;
 using AntiCheat.Client.Models;
 using AntiCheat.Client.Services;
 
-const string checkerVersion = "1.1.0";
+const string checkerVersion = "1.2.0";
 Console.Title = "Anti-Cheat Checker";
 Console.WriteLine("ANTI-CHEAT CHECKER");
-Console.WriteLine("Проверяются только категории, перечисленные в rules.json.");
+Console.WriteLine("Проверяются только категории, перечисленные в rules.json и indicators.json.");
 Console.WriteLine("Содержимое личных документов, пароли и браузерные данные не читаются.");
 Console.WriteLine();
 
 var baseDir = AppContext.BaseDirectory;
 var rulesPath = Path.Combine(baseDir, "rules.json");
+var indicatorsPath = Path.Combine(baseDir, "indicators.json");
 var resultPath = Path.Combine(baseDir, "result.json");
 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, WriteIndented = true };
 
@@ -26,8 +27,12 @@ var report = new CheckReport
 {
     CheckerVersion = checkerVersion,
     RulesVersion = rules.RulesVersion,
-    Checks = ["processes", "configured_directories", "startup_entries", "scheduled_tasks", "hosts_entries", "configured_file_locations", "game_file_integrity"]
+    Checks = ["indicator_database", "processes", "configured_directories", "startup_entries", "scheduled_tasks", "hosts_entries", "configured_file_locations", "game_file_integrity"]
 };
+
+var indicators = IndicatorLoader.Load(indicatorsPath, options, report);
+IndicatorLoader.ApplyToRules(indicators, rules);
+Console.WriteLine($"База индикаторов: {indicators.Version}, правил: {indicators.Indicators.Count}");
 
 var scans = new (string Label, Action Run)[]
 {
