@@ -3,10 +3,11 @@ using System.Text.Json;
 using AntiCheat.Client.Models;
 using AntiCheat.Client.Services;
 
-const string checkerVersion = "1.0.0";
+const string checkerVersion = "1.1.0";
 Console.Title = "Anti-Cheat Checker";
 Console.WriteLine("ANTI-CHEAT CHECKER");
-Console.WriteLine("Проверяются только настроенные правила. Личные документы не читаются.");
+Console.WriteLine("Проверяются только категории, перечисленные в rules.json.");
+Console.WriteLine("Содержимое личных документов, пароли и браузерные данные не читаются.");
 Console.WriteLine();
 
 var baseDir = AppContext.BaseDirectory;
@@ -25,12 +26,31 @@ var report = new CheckReport
 {
     CheckerVersion = checkerVersion,
     RulesVersion = rules.RulesVersion,
-    Checks = ["processes", "game_processes"]
+    Checks = ["processes", "configured_directories", "startup_entries", "scheduled_tasks", "hosts_entries", "configured_file_locations", "game_file_integrity"]
 };
 
-Console.WriteLine("[1/1] Проверка процессов...");
-ProcessScanner.Scan(rules, report);
-report.Status = report.Found.Count == 0 ? "clean" : report.Found.Any(f => f.Severity == "high") ? "suspicious" : "review";
+var scans = new (string Label, Action Run)[]
+{
+    ("Проверка процессов", () => ProcessScanner.Scan(rules, report)),
+    ("Проверка заданных папок", () => DirectoryScanner.Scan(rules, report)),
+    ("Проверка автозапуска и задач", () => StartupScanner.Scan(rules, report)),
+    ("Проверка HOSTS", () => HostsScanner.Scan(rules, report)),
+    ("Проверка имён файлов", () => FileScanner.Scan(rules, report)),
+    ("Проверка целостности игровых файлов", () => GameIntegrityScanner.Scan(rules, report))
+};
+
+for (var index = 0; index < scans.Length; index++)
+{
+    Console.WriteLine($"[{index + 1}/{scans.Length}] {scans[index].Label}...");
+    try { scans[index].Run(); }
+    catch (Exception ex) { ScannerHelpers.AddScanError(report, $"Ошибка этапа '{scans[index].Label}': {ex.Message}"); }
+}
+
+report.Status = report.Found.Count == 0
+    ? "clean"
+    : report.Found.Any(f => f.Severity == "high")
+        ? "suspicious"
+        : "review";
 report.Time = DateTime.UtcNow;
 
 var reportJson = JsonSerializer.Serialize(report, options);
@@ -55,16 +75,22 @@ else
         using var response = await client.PostAsync(rules.ReportApiUrl, content);
         var body = await response.Content.ReadAsStringAsync();
         if (!response.IsSuccessStatusCode) throw new Exception($"{(int)response.StatusCode}: {body}");
+        Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("Отчёт отправлен проверяющему.");
+        Console.ResetColor();
     }
     catch (Exception ex)
     {
+        Console.ForegroundColor = ConsoleColor.Red;
         Console.Error.WriteLine($"Не удалось отправить отчёт: {ex.Message}");
+        Console.ResetColor();
     }
 }
 
+Console.WriteLine();
 Console.WriteLine($"Статус: {report.Status}");
 Console.WriteLine($"Совпадений: {report.Found.Count}");
+Console.WriteLine($"Ошибок сканирования: {report.ScanErrors.Count}");
 Console.WriteLine($"Локальный отчёт: {resultPath}");
 Console.WriteLine("Нажмите Enter для выхода.");
 Console.ReadLine();
