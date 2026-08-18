@@ -1,0 +1,7 @@
+bin/
+obj/
+.vs/
+.wrangler/
+result.json
+*.user
+*.suo

@@ -1,0 +1,12 @@
+{
+  "rulesVersion": "1.0.0",
+  "reportApiUrl": "https://anti-cheat-discord-relay.haosyy-checker.workers.dev/report",
+  "gameProcessNames": ["gta5", "ragemp_v"],
+  "blockedProcessNames": [],
+  "suspiciousKeywords": [],
+  "suspiciousDirectories": [],
+  "hostBlockedDomains": [],
+  "scanRoots": [],
+  "scanFileExtensions": [".exe", ".dll", ".ahk", ".zip", ".rar", ".js"],
+  "expectedGameFiles": []
+}
