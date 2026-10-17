@@ -1,0 +1,42 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore client/AntiCheat.Client/AntiCheat.Client.csproj
+
+      - name: Publish
+        run: dotnet publish client/AntiCheat.Client/AntiCheat.Client.csproj -c Release -r win-x64 --self-contained true -o publish
+
+      - name: Package
+        run: Compress-Archive -Path publish/* -DestinationPath AntiCheatChecker-win-x64.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.0
+          name: Anti-Cheat Checker v2.0.0
+          body: |
+            GUI-версия Anti-Cheat Checker.
+
+            - Минималистичный интерфейс
+            - Проверка процессов, папок, автозапуска, HOSTS и игровых файлов
+            - Проверка модулей игры, служб, прокси и оверлеев
+            - Отчёт отправляется на настроенный API
+          files: AntiCheatChecker-win-x64.zip
