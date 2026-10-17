@@ -18,6 +18,7 @@ public sealed class MainWindow : Form
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         WriteIndented = true
     };
 
