@@ -10,7 +10,12 @@ $zipPath = Join-Path $temp 'CheatChecker.zip'
 
 try
 {
-    Invoke-WebRequest -Uri $ReleaseUrl -OutFile $zipPath -UseBasicParsing
+    & curl.exe -L --fail --silent --show-error -o $zipPath $ReleaseUrl
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Download failed with curl exit code $LASTEXITCODE"
+    }
+
     $actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
 
     if ($actualHash -ne $ExpectedSha256.ToUpperInvariant())
