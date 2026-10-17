@@ -12,7 +12,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     $command = "try { & '$scriptLiteral' -ReleaseUrl '$urlLiteral' -ExpectedSha256 '$ExpectedSha256' -CheckCode '$CheckCode'; exit 0 } catch { Write-Error -ErrorRecord `$_ -ErrorAction Continue; Read-Host 'Press Enter to close'; exit 1 }"
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $child = Start-Process -FilePath $ps -Verb RunAs -ArgumentList "-NoProfile -EncodedCommand $encoded" -PassThru
+    $child = Start-Process -FilePath $ps -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded" -PassThru
     try {
         $childHandle = $child.Handle
         $child.WaitForExit()
