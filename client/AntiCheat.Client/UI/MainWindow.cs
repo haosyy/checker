@@ -8,7 +8,6 @@ namespace AntiCheat.Client.UI;
 public sealed class MainWindow : Form
 {
     private const string CheckerVersion = "2.1.0";
-
     private readonly Panel _titleBar = new();
     private readonly Label _titleLabel = new();
     private readonly Button _closeButton = new();
@@ -18,10 +17,12 @@ public sealed class MainWindow : Form
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         WriteIndented = true
     };
-
+    private readonly JsonSerializerOptions _reportJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+    };
     private bool _dragging;
     private Point _dragOffset;
 
@@ -42,14 +43,12 @@ public sealed class MainWindow : Form
         TopMost = true;
         BackColor = Color.FromArgb(18, 18, 20);
         ShowInTaskbar = true;
-
         _titleBar.Height = 34;
         _titleBar.Dock = DockStyle.Top;
         _titleBar.BackColor = Color.FromArgb(10, 10, 12);
         _titleBar.MouseDown += TitleBarMouseDown;
         _titleBar.MouseMove += TitleBarMouseMove;
         _titleBar.MouseUp += TitleBarMouseUp;
-
         _titleLabel.Text = "Cheat Checker";
         _titleLabel.Font = new Font("Segoe UI", 9F);
         _titleLabel.ForeColor = Color.FromArgb(190, 190, 195);
@@ -58,7 +57,6 @@ public sealed class MainWindow : Form
         _titleLabel.MouseDown += TitleBarMouseDown;
         _titleLabel.MouseMove += TitleBarMouseMove;
         _titleLabel.MouseUp += TitleBarMouseUp;
-
         _closeButton.Text = "✕";
         _closeButton.Font = new Font("Segoe UI", 9F);
         _closeButton.ForeColor = Color.FromArgb(170, 170, 175);
@@ -69,17 +67,14 @@ public sealed class MainWindow : Form
         _closeButton.Dock = DockStyle.Right;
         _closeButton.Cursor = Cursors.Hand;
         _closeButton.Click += (_, _) => Close();
-
         _stateLabel.Text = "Подготовка проверки…";
         _stateLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
         _stateLabel.ForeColor = Color.White;
         _stateLabel.AutoSize = true;
         _stateLabel.Location = new Point(28, 68);
-
         _progress.Style = ProgressBarStyle.Continuous;
         _progress.Size = new Size(364, 5);
         _progress.Location = new Point(28, 104);
-
         _results.Font = new Font("Segoe UI", 9F);
         _results.BackColor = Color.FromArgb(24, 24, 27);
         _results.ForeColor = Color.FromArgb(215, 215, 220);
@@ -87,7 +82,6 @@ public sealed class MainWindow : Form
         _results.Size = new Size(364, 170);
         _results.Location = new Point(28, 126);
         _results.HorizontalScrollbar = true;
-
         _titleBar.Controls.Add(_titleLabel);
         _titleBar.Controls.Add(_closeButton);
         Controls.Add(_results);
@@ -120,17 +114,14 @@ public sealed class MainWindow : Form
         _results.Items.Clear();
         _progress.Value = 0;
         SetState("Проверка запущена", Color.White);
-
         var report = new CheckReport { CheckerVersion = CheckerVersion };
         var baseDir = AppContext.BaseDirectory;
         var rulesPath = Path.Combine(baseDir, "rules.json");
         var indicatorsPath = Path.Combine(baseDir, "indicators.json");
-
         try
         {
             if (!File.Exists(rulesPath))
                 throw new FileNotFoundException("Файл rules.json не найден.");
-
             var rules = JsonSerializer.Deserialize<Rules>(await File.ReadAllTextAsync(rulesPath), _jsonOptions)
                 ?? new Rules();
             report.RulesVersion = rules.RulesVersion;
@@ -140,10 +131,8 @@ public sealed class MainWindow : Form
                 "scheduled_tasks", "hosts_entries", "configured_file_locations", "game_file_integrity",
                 "game_modules", "windows_services", "system_proxy", "overlay_windows"
             ];
-
             var indicators = IndicatorLoader.Load(indicatorsPath, _jsonOptions, report);
             IndicatorLoader.ApplyToRules(indicators, rules);
-
             var scans = new (string Label, Action Run)[]
             {
                 ("Процессы", () => ProcessScanner.Scan(rules, report)),
@@ -157,10 +146,8 @@ public sealed class MainWindow : Form
                 ("Прокси", () => ProxyScanner.Scan(rules, report)),
                 ("Оверлеи", () => OverlayScanner.Scan(rules, report))
             };
-
             report.GameRunning = rules.GameProcessNames
                 .Any(name => System.Diagnostics.Process.GetProcessesByName(name).Length > 0);
-
             for (var i = 0; i < scans.Length; i++)
             {
                 var scan = scans[i];
@@ -175,12 +162,10 @@ public sealed class MainWindow : Form
                 });
                 _progress.Value = (i + 1) * 100 / scans.Length;
             }
-
             report.Status = report.Found.Count == 0
                 ? "clean"
                 : report.Found.Any(f => f.Severity == "high") ? "suspicious" : "review";
             report.Time = DateTime.UtcNow;
-
             ShowResult(report);
             await SendReportAsync(rules, report);
         }
@@ -200,13 +185,11 @@ public sealed class MainWindow : Form
             SetState("Подозрительно", Color.FromArgb(255, 105, 105));
         else
             SetState("Требует проверки", Color.FromArgb(255, 190, 90));
-
         if (report.Found.Count == 0)
             _results.Items.Add("Подозрительных совпадений не найдено.");
         else
             foreach (var finding in report.Found)
                 _results.Items.Add($"{finding.Type}: {finding.Name}");
-
         foreach (var error in report.ScanErrors)
             _results.Items.Add($"Ошибка: {error}");
     }
@@ -215,28 +198,29 @@ public sealed class MainWindow : Form
     {
         var apiUrl = rules.ReportApiUrl;
         var token = Environment.GetEnvironmentVariable("REPORT_API_TOKEN");
-
-        if (string.IsNullOrWhiteSpace(apiUrl) || string.IsNullOrWhiteSpace(token))
+        if (string.IsNullOrWhiteSpace(apiUrl))
         {
-            _results.Items.Add("Отчёт не отправлен: нет API URL или токена.");
+            _results.Items.Add("Отчёт не отправлен: reportApiUrl пуст в rules.json.");
             return;
         }
-
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            _results.Items.Add("Отчёт не отправлен: процесс не получил REPORT_API_TOKEN.");
+            return;
+        }
         try
         {
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             using var content = new StringContent(
-                JsonSerializer.Serialize(report, _jsonOptions), Encoding.UTF8, "application/json");
+                JsonSerializer.Serialize(report, _reportJsonOptions), Encoding.UTF8, "application/json");
             using var response = await client.PostAsync(apiUrl, content);
-
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync();
                 throw new Exception($"{(int)response.StatusCode}: {body}");
             }
-
             _results.Items.Add("Отчёт отправлен.");
         }
         catch (Exception ex)
@@ -256,7 +240,6 @@ public sealed class MainWindow : Form
             });
             return;
         }
-
         _stateLabel.Text = text;
         _stateLabel.ForeColor = color;
     }
