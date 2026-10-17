@@ -7,100 +7,118 @@ namespace AntiCheat.Client.UI;
 
 public sealed class MainWindow : Form
 {
-    private const string CheckerVersion = "2.0.0";
+    private const string CheckerVersion = "2.1.0";
 
-    private readonly Label _title = new();
-    private readonly Label _subtitle = new();
-    private readonly Button _startButton = new();
-    private readonly ProgressBar _progress = new();
-    private readonly Label _stateLabel = new();
-    private readonly ListBox _results = new();
+    private readonly Panel _titleBar = new();
+    private readonly Label _titleLabel = new();
     private readonly Button _closeButton = new();
+    private readonly Label _stateLabel = new();
+    private readonly ProgressBar _progress = new();
+    private readonly ListBox _results = new();
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         WriteIndented = true
     };
 
-    private bool _running;
+    private bool _dragging;
+    private Point _dragOffset;
 
     public MainWindow()
     {
         InitializeUi();
+        Shown += async (_, _) => await RunCheckAsync();
     }
 
     private void InitializeUi()
     {
-        Text = "Anti-Cheat Checker";
+        Text = "Cheat Checker";
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(560, 540);
-        FormBorderStyle = FormBorderStyle.FixedSingle;
+        ClientSize = new Size(420, 320);
+        FormBorderStyle = FormBorderStyle.None;
         MaximizeBox = false;
-        BackColor = Color.FromArgb(15, 17, 21);
+        MinimizeBox = false;
+        TopMost = true;
+        BackColor = Color.FromArgb(18, 18, 20);
+        ShowInTaskbar = true;
 
-        _title.Text = "Anti-Cheat Checker";
-        _title.Font = new Font("Segoe UI", 18F, FontStyle.Bold);
-        _title.ForeColor = Color.White;
-        _title.AutoSize = true;
-        _title.Location = new Point(32, 28);
+        _titleBar.Height = 34;
+        _titleBar.Dock = DockStyle.Top;
+        _titleBar.BackColor = Color.FromArgb(10, 10, 12);
+        _titleBar.MouseDown += TitleBarMouseDown;
+        _titleBar.MouseMove += TitleBarMouseMove;
+        _titleBar.MouseUp += TitleBarMouseUp;
 
-        _subtitle.Text = "Добровольная проверка.\nЛичные документы, пароли и браузерные данные не читаются.";
-        _subtitle.Font = new Font("Segoe UI", 9.5F);
-        _subtitle.ForeColor = Color.FromArgb(150, 158, 170);
-        _subtitle.Location = new Point(34, 72);
-        _subtitle.Size = new Size(490, 48);
+        _titleLabel.Text = "Cheat Checker";
+        _titleLabel.Font = new Font("Segoe UI", 9F);
+        _titleLabel.ForeColor = Color.FromArgb(190, 190, 195);
+        _titleLabel.AutoSize = true;
+        _titleLabel.Location = new Point(14, 9);
+        _titleLabel.MouseDown += TitleBarMouseDown;
+        _titleLabel.MouseMove += TitleBarMouseMove;
+        _titleLabel.MouseUp += TitleBarMouseUp;
 
-        _startButton.Text = "Начать проверку";
-        _startButton.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-        _startButton.ForeColor = Color.White;
-        _startButton.BackColor = Color.FromArgb(79, 140, 255);
-        _startButton.FlatStyle = FlatStyle.Flat;
-        _startButton.FlatAppearance.BorderSize = 0;
-        _startButton.Size = new Size(494, 48);
-        _startButton.Location = new Point(33, 134);
-        _startButton.Cursor = Cursors.Hand;
-        _startButton.Click += async (_, _) => await RunCheckAsync();
-
-        _progress.Style = ProgressBarStyle.Continuous;
-        _progress.Size = new Size(494, 8);
-        _progress.Location = new Point(33, 198);
-
-        _stateLabel.Text = "Готово к проверке";
-        _stateLabel.Font = new Font("Segoe UI", 10F);
-        _stateLabel.ForeColor = Color.FromArgb(190, 196, 205);
-        _stateLabel.Location = new Point(34, 218);
-        _stateLabel.AutoSize = true;
-
-        _results.Font = new Font("Consolas", 9.5F);
-        _results.BackColor = Color.FromArgb(23, 26, 32);
-        _results.ForeColor = Color.FromArgb(220, 224, 230);
-        _results.BorderStyle = BorderStyle.None;
-        _results.Size = new Size(494, 230);
-        _results.Location = new Point(33, 250);
-        _results.HorizontalScrollbar = true;
-
-        _closeButton.Text = "Закрыть";
-        _closeButton.Font = new Font("Segoe UI", 10F);
-        _closeButton.ForeColor = Color.White;
-        _closeButton.BackColor = Color.FromArgb(38, 43, 52);
+        _closeButton.Text = "✕";
+        _closeButton.Font = new Font("Segoe UI", 9F);
+        _closeButton.ForeColor = Color.FromArgb(170, 170, 175);
+        _closeButton.BackColor = Color.FromArgb(10, 10, 12);
         _closeButton.FlatStyle = FlatStyle.Flat;
         _closeButton.FlatAppearance.BorderSize = 0;
-        _closeButton.Size = new Size(494, 40);
-        _closeButton.Location = new Point(33, 492);
+        _closeButton.Size = new Size(38, 34);
+        _closeButton.Dock = DockStyle.Right;
         _closeButton.Cursor = Cursors.Hand;
         _closeButton.Click += (_, _) => Close();
 
-        Controls.AddRange([_title, _subtitle, _startButton, _progress, _stateLabel, _results, _closeButton]);
+        _stateLabel.Text = "Подготовка проверки…";
+        _stateLabel.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+        _stateLabel.ForeColor = Color.White;
+        _stateLabel.AutoSize = true;
+        _stateLabel.Location = new Point(28, 68);
+
+        _progress.Style = ProgressBarStyle.Continuous;
+        _progress.Size = new Size(364, 5);
+        _progress.Location = new Point(28, 104);
+
+        _results.Font = new Font("Segoe UI", 9F);
+        _results.BackColor = Color.FromArgb(24, 24, 27);
+        _results.ForeColor = Color.FromArgb(215, 215, 220);
+        _results.BorderStyle = BorderStyle.None;
+        _results.Size = new Size(364, 170);
+        _results.Location = new Point(28, 126);
+        _results.HorizontalScrollbar = true;
+
+        _titleBar.Controls.Add(_titleLabel);
+        _titleBar.Controls.Add(_closeButton);
+        Controls.Add(_results);
+        Controls.Add(_progress);
+        Controls.Add(_stateLabel);
+        Controls.Add(_titleBar);
+    }
+
+    private void TitleBarMouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        _dragging = true;
+        _dragOffset = new Point(e.X, e.Y);
+    }
+
+    private void TitleBarMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        var screenPoint = PointToScreen(new Point(e.X, e.Y));
+        Location = new Point(screenPoint.X - _dragOffset.X, screenPoint.Y - _dragOffset.Y);
+    }
+
+    private void TitleBarMouseUp(object? sender, MouseEventArgs e)
+    {
+        _dragging = false;
     }
 
     private async Task RunCheckAsync()
     {
-        if (_running) return;
-        _running = true;
-        _startButton.Enabled = false;
         _results.Items.Clear();
         _progress.Value = 0;
-        SetState("Подготовка проверки…", Color.FromArgb(190, 196, 205));
+        SetState("Проверка запущена", Color.White);
 
         var report = new CheckReport { CheckerVersion = CheckerVersion };
         var baseDir = AppContext.BaseDirectory;
@@ -127,16 +145,16 @@ public sealed class MainWindow : Form
 
             var scans = new (string Label, Action Run)[]
             {
-                ("Проверка процессов", () => ProcessScanner.Scan(rules, report)),
-                ("Проверка папок", () => DirectoryScanner.Scan(rules, report)),
-                ("Проверка автозапуска и задач", () => StartupScanner.Scan(rules, report)),
-                ("Проверка HOSTS", () => HostsScanner.Scan(rules, report)),
-                ("Проверка файлов", () => FileScanner.Scan(rules, report)),
-                ("Проверка игровых файлов", () => GameIntegrityScanner.Scan(rules, report)),
-                ("Проверка модулей игры", () => ModuleScanner.Scan(rules, report)),
-                ("Проверка служб", () => ServiceScanner.Scan(rules, report)),
-                ("Проверка прокси", () => ProxyScanner.Scan(rules, report)),
-                ("Проверка оверлеев", () => OverlayScanner.Scan(rules, report))
+                ("Процессы", () => ProcessScanner.Scan(rules, report)),
+                ("Папки", () => DirectoryScanner.Scan(rules, report)),
+                ("Автозапуск", () => StartupScanner.Scan(rules, report)),
+                ("HOSTS", () => HostsScanner.Scan(rules, report)),
+                ("Файлы", () => FileScanner.Scan(rules, report)),
+                ("Игровые файлы", () => GameIntegrityScanner.Scan(rules, report)),
+                ("Модули игры", () => ModuleScanner.Scan(rules, report)),
+                ("Службы", () => ServiceScanner.Scan(rules, report)),
+                ("Прокси", () => ProxyScanner.Scan(rules, report)),
+                ("Оверлеи", () => OverlayScanner.Scan(rules, report))
             };
 
             report.GameRunning = rules.GameProcessNames
@@ -145,8 +163,7 @@ public sealed class MainWindow : Form
             for (var i = 0; i < scans.Length; i++)
             {
                 var scan = scans[i];
-                var percent = (i + 1) * 100 / scans.Length;
-                SetState(scan.Label + "…", Color.FromArgb(190, 196, 205));
+                SetState(scan.Label, Color.FromArgb(200, 200, 205));
                 await Task.Run(() =>
                 {
                     try { scan.Run(); }
@@ -155,7 +172,7 @@ public sealed class MainWindow : Form
                         ScannerHelpers.AddScanError(report, $"Ошибка этапа '{scan.Label}': {ex.Message}");
                     }
                 });
-                _progress.Value = percent;
+                _progress.Value = (i + 1) * 100 / scans.Length;
             }
 
             report.Status = report.Found.Count == 0
@@ -169,34 +186,28 @@ public sealed class MainWindow : Form
         catch (Exception ex)
         {
             ScannerHelpers.AddScanError(report, ex.Message);
-            SetState("Проверка завершена с ошибкой", Color.FromArgb(255, 99, 99));
+            SetState("Ошибка проверки", Color.FromArgb(255, 105, 105));
             _results.Items.Add(ex.Message);
-        }
-        finally
-        {
-            _startButton.Enabled = true;
-            _startButton.Text = "Повторить проверку";
-            _running = false;
         }
     }
 
     private void ShowResult(CheckReport report)
     {
         if (report.Status == "clean")
-            SetState("Проверка завершена: чисто", Color.FromArgb(70, 200, 130));
+            SetState("Чисто", Color.FromArgb(80, 210, 140));
         else if (report.Status == "suspicious")
-            SetState("Проверка завершена: подозрительно", Color.FromArgb(255, 99, 99));
+            SetState("Подозрительно", Color.FromArgb(255, 105, 105));
         else
-            SetState("Проверка завершена: требуется проверка", Color.FromArgb(255, 190, 80));
+            SetState("Требует проверки", Color.FromArgb(255, 190, 90));
 
         if (report.Found.Count == 0)
             _results.Items.Add("Подозрительных совпадений не найдено.");
         else
             foreach (var finding in report.Found)
-                _results.Items.Add($"[{finding.Severity.ToUpperInvariant()}] {finding.Type}: {finding.Name}");
+                _results.Items.Add($"{finding.Type}: {finding.Name}");
 
         foreach (var error in report.ScanErrors)
-            _results.Items.Add($"[ERROR] {error}");
+            _results.Items.Add($"Ошибка: {error}");
     }
 
     private async Task SendReportAsync(Rules rules, CheckReport report)
@@ -206,7 +217,7 @@ public sealed class MainWindow : Form
 
         if (string.IsNullOrWhiteSpace(apiUrl) || string.IsNullOrWhiteSpace(token))
         {
-            _results.Items.Add("[WARN] Отчёт не отправлен: не настроен API URL или токен.");
+            _results.Items.Add("Отчёт не отправлен: нет API URL или токена.");
             return;
         }
 
@@ -225,11 +236,11 @@ public sealed class MainWindow : Form
                 throw new Exception($"{(int)response.StatusCode}: {body}");
             }
 
-            _results.Items.Add("Отчёт отправлен проверяющему.");
+            _results.Items.Add("Отчёт отправлен.");
         }
         catch (Exception ex)
         {
-            _results.Items.Add($"[ERROR] Не удалось отправить отчёт: {ex.Message}");
+            _results.Items.Add($"Не удалось отправить отчёт: {ex.Message}");
         }
     }
 
