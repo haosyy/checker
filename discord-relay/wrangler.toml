@@ -1,3 +1,11 @@
 name = "anti-cheat-discord-relay"
-main = "worker.js"
+main = "session-worker.js"
 compatibility_date = "2025-01-01"
+
+[[durable_objects.bindings]]
+name = "CHECK_SESSIONS"
+class_name = "CheckSession"
+
+[[migrations]]
+tag = "v1-check-sessions"
+new_sqlite_classes = ["CheckSession"]
