@@ -2,7 +2,7 @@ namespace AntiCheat.Client.Models;
 
 public sealed class Rules
 {
-    public string RulesVersion { get; set; } = "1.1.0";
+    public string RulesVersion { get; set; } = "2.0.0";
     public string ReportApiUrl { get; set; } = "";
     public string GameDirectory { get; set; } = "";
     public List<string> GameProcessNames { get; set; } = [];
@@ -12,6 +12,10 @@ public sealed class Rules
     public List<string> HostBlockedDomains { get; set; } = [];
     public List<string> ScanRoots { get; set; } = [];
     public List<string> ScanFileExtensions { get; set; } = [];
+    public List<string> SuspiciousModuleNames { get; set; } = [];
+    public List<string> BlockedServiceNames { get; set; } = [];
+    public List<string> ProxyBlockedDomains { get; set; } = [];
+    public List<string> OverlayKeywords { get; set; } = [];
     public List<GameFileRule> ExpectedGameFiles { get; set; } = [];
 }
 
@@ -33,7 +37,7 @@ public sealed class Finding
 public sealed class CheckReport
 {
     public string CheckId { get; set; } = Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
-    public string CheckerVersion { get; set; } = "1.1.0";
+    public string CheckerVersion { get; set; } = "2.0.0";
     public string RulesVersion { get; set; } = "";
     public string Computer { get; set; } = Environment.MachineName;
     public string User { get; set; } = Environment.UserName;

@@ -41,6 +41,18 @@ public static class IndicatorLoader
                 case "keyword":
                     AddUnique(rules.SuspiciousKeywords, indicator.Value);
                     break;
+                case "module":
+                    AddUnique(rules.SuspiciousModuleNames, indicator.Value);
+                    break;
+                case "service":
+                    AddUnique(rules.BlockedServiceNames, indicator.Value);
+                    break;
+                case "proxy":
+                    AddUnique(rules.ProxyBlockedDomains, indicator.Value);
+                    break;
+                case "overlay":
+                    AddUnique(rules.OverlayKeywords, indicator.Value);
+                    break;
             }
         }
     }
