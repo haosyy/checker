@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$ReleaseUrl,
-    [Parameter(Mandatory = $true)][string]$ExpectedSha256
+    [Parameter(Mandatory = $true)][string]$ExpectedSha256,
+    [Parameter(Mandatory = $true)][string]$ReportApiToken
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,6 +32,7 @@ try
         throw "Executable file was not found in the downloaded archive."
     }
 
+    $env:REPORT_API_TOKEN = $ReportApiToken
     Start-Process -FilePath $exe.FullName -WorkingDirectory $exe.DirectoryName -Verb RunAs -Wait
 }
 finally
