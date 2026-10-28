@@ -3,12 +3,15 @@ import relay from './worker.js';
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const hash = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('');
 const randomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+const normalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 const safeEqual = (a, b) => {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  if (a.length !== b.length || a.length === 0) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 };
+const isAdmin = (auth, env) => safeEqual(normalize(auth), normalize(`Bearer ${env.REPORT_API_TOKEN}`));
+const isPlayerKey = (auth, env) => Boolean(env.PLAYER_KEY) && safeEqual(normalize(auth), normalize(`Bearer ${env.PLAYER_KEY}`));
 const isValidReport = report => report && ['clean', 'review', 'suspicious'].includes(report.status) && Array.isArray(report.found) && report.found.every(item => item && typeof item === 'object');
 async function readBody(request) {
   if (!request.body) throw new Error('Missing body');
@@ -38,11 +41,21 @@ const forward = (report, env) => relay.fetch(new Request('https://internal/repor
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (path === '/ping') {
+      return json({
+        ok: true,
+        revision: 3,
+        adminTokenConfigured: Boolean(env.REPORT_API_TOKEN),
+        playerKeyConfigured: Boolean(env.PLAYER_KEY),
+        playerKeyLength: env.PLAYER_KEY ? String(env.PLAYER_KEY).trim().length : 0,
+        rateLimit: '3 checks per 30 minutes per IP'
+      });
+    }
     if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
     if (!env.REPORT_API_TOKEN || !env.CHECK_SESSIONS) return json({ error: 'Server not configured' }, 503);
     const auth = request.headers.get('authorization') || '';
     if (path === '/checks') {
-      if (auth !== `Bearer ${env.REPORT_API_TOKEN}`) return json({ error: 'Unauthorized' }, 401);
+      if (!isAdmin(auth, env)) return json({ error: 'Unauthorized' }, 401);
       const checkCode = randomCode();
       const stub = env.CHECK_SESSIONS.get(env.CHECK_SESSIONS.idFromName(await hash(checkCode)));
       const response = await stub.fetch('https://internal/create', { method: 'POST' });
@@ -52,9 +65,9 @@ export default {
     }
     if (path !== '/report') return json({ error: 'Not found' }, 404);
     // Preserve the working administrator-token path during migration.
-    if (auth === `Bearer ${env.REPORT_API_TOKEN}`) return relay.fetch(request, env);
+    if (isAdmin(auth, env)) return relay.fetch(request, env);
     // Long-lived shared player key: one command, unlimited checks, rate limited per IP.
-    if (env.PLAYER_KEY && safeEqual(auth, `Bearer ${env.PLAYER_KEY}`)) {
+    if (isPlayerKey(auth, env)) {
       let report;
       try { report = await readBody(request); } catch { return json({ error: 'Invalid or oversized JSON report' }, 400); }
       if (!isValidReport(report)) return json({ error: 'Invalid report' }, 400);
@@ -65,15 +78,16 @@ export default {
       report.check_id = ipKey.slice(0, 12).toUpperCase();
       return forward(report, env);
     }
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-    if (!/^[a-f0-9]{64}$/.test(token)) return json({ error: 'Invalid check code' }, 401);
+    const trimmed = normalize(auth);
+    const token = trimmed.startsWith('bearer ') ? trimmed.slice(7) : trimmed;
+    if (!/^[a-f0-9]{64}$/.test(token)) return json({ error: 'Invalid authorization' }, 401);
     let report;
     try { report = await readBody(request); } catch { return json({ error: 'Invalid or oversized JSON report' }, 400); }
     if (!isValidReport(report)) return json({ error: 'Invalid report' }, 400);
     const key = await hash(token);
     const stub = env.CHECK_SESSIONS.get(env.CHECK_SESSIONS.idFromName(key));
     const claimed = await stub.fetch('https://internal/consume', { method: 'POST' });
-    if (!claimed.ok) return json({ error: 'Check code expired or already used' }, 401);
+    if (!claimed.ok) return json({ error: 'Check code expired or already used, or player key not recognised' }, 401);
     report.check_id = key.slice(0, 12).toUpperCase();
     return forward(report, env);
   }
