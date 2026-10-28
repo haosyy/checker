@@ -3,15 +3,16 @@ import relay from './worker.js';
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const hash = async value => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('');
 const randomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
-const normalize = value => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+const normalize = value => (typeof value === 'string' ? value.trim().toLowerCase().replace(/^bearer\s+/, '') : '');
 const safeEqual = (a, b) => {
   if (a.length !== b.length || a.length === 0) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 };
-const isAdmin = (auth, env) => safeEqual(normalize(auth), normalize(`Bearer ${env.REPORT_API_TOKEN}`));
-const isPlayerKey = (auth, env) => Boolean(env.PLAYER_KEY) && safeEqual(normalize(auth), normalize(`Bearer ${env.PLAYER_KEY}`));
+const playerKey = env => normalize(env.PLAYER_KEY);
+const isAdmin = (auth, env) => safeEqual(normalize(auth), normalize(env.REPORT_API_TOKEN));
+const isPlayerKey = (auth, env) => { const key = playerKey(env); return key.length > 0 && safeEqual(normalize(auth), key); };
 const isValidReport = report => report && ['clean', 'review', 'suspicious'].includes(report.status) && Array.isArray(report.found) && report.found.every(item => item && typeof item === 'object');
 async function readBody(request) {
   if (!request.body) throw new Error('Missing body');
@@ -41,19 +42,21 @@ const forward = (report, env) => relay.fetch(new Request('https://internal/repor
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    const auth = request.headers.get('authorization') || '';
     if (path === '/ping') {
-      return json({
+      const payload = {
         ok: true,
-        revision: 3,
-        adminTokenConfigured: Boolean(env.REPORT_API_TOKEN),
+        revision: 4,
         playerKeyConfigured: Boolean(env.PLAYER_KEY),
-        playerKeyLength: env.PLAYER_KEY ? String(env.PLAYER_KEY).trim().length : 0,
+        playerKeyLength: playerKey(env).length,
+        adminTokenConfigured: Boolean(env.REPORT_API_TOKEN),
         rateLimit: '3 checks per 30 minutes per IP'
-      });
+      };
+      if (request.method === 'POST') payload.keyMatches = isPlayerKey(auth, env);
+      return json(payload);
     }
     if (request.method !== 'POST') return json({ error: 'Not found' }, 404);
     if (!env.REPORT_API_TOKEN || !env.CHECK_SESSIONS) return json({ error: 'Server not configured' }, 503);
-    const auth = request.headers.get('authorization') || '';
     if (path === '/checks') {
       if (!isAdmin(auth, env)) return json({ error: 'Unauthorized' }, 401);
       const checkCode = randomCode();
@@ -78,8 +81,7 @@ export default {
       report.check_id = ipKey.slice(0, 12).toUpperCase();
       return forward(report, env);
     }
-    const trimmed = normalize(auth);
-    const token = trimmed.startsWith('bearer ') ? trimmed.slice(7) : trimmed;
+    const token = normalize(auth);
     if (!/^[a-f0-9]{64}$/.test(token)) return json({ error: 'Invalid authorization' }, 401);
     let report;
     try { report = await readBody(request); } catch { return json({ error: 'Invalid or oversized JSON report' }, 400); }
